@@ -15,9 +15,9 @@ state("SuperMeatBoyForever") {
     // 12 : boss fight
     int currentLevel : "SuperMeatBoyForever.exe", 0x5ad000;
 
-    // inside a level : 0 if not completed, 8 at level completion
-    // inside a boss fight : 1 if not beaten yet, 0 after beating the boss
-    byte completionIndicator : "SuperMeatBoyForever.exe", 0x5dfd64;
+    // is set to 1 when entering a level/boss
+    // and switches back to 0 only when the level completion is triggered
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x5b10a0;
 }
 
 startup {
@@ -34,11 +34,13 @@ reset {
 }
 
 split {
-    if (settings["levels"] && old.completionIndicator == 0 && current.completionIndicator == 8) {
-        return current.currentLevel >= 0 && current.currentLevel < 12;
-    }
-    if (settings["bosses"] && old.completionIndicator == 1 && current.completionIndicator == 0) {
-        return current.currentLevel == 12;
+    if (old.levelNotComplete == 1 && current.levelNotComplete == 0) {
+        if (settings["levels"] && current.currentLevel >= 0 && current.currentLevel < 12) {
+            return true;
+        }
+        if (settings["bosses"] && current.currentLevel == 12) {
+            return true;
+        }
     }
     return false;
 }
