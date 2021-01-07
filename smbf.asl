@@ -24,6 +24,12 @@ state("SuperMeatBoyForever") {
     // is set to 1 when entering a level/boss
     // and switches back to 0 only when the level completion is triggered
     int levelNotComplete : "SuperMeatBoyForever.exe", 0x5b10a0;
+    
+    // on the final boss, second least significant bit is true when meat boy is frozen for animation
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x5df598, 0x10c;
+
+    // not sure what this is exactly, but the value is 4 when meat boy dies
+    int status : "SuperMeatBoyForever.exe", 0x5df598, 0x1c0;
 }
 
 startup {
@@ -53,6 +59,8 @@ init {
     // resets to 0 whenever currentChapter changes, increments whenever a level is beaten
     vars.levelCount = 0;
 
+    vars.finalBlowSoon = false;
+
     vars.GetChunkId = (Func<int, int, int, ushort>) ((chapter, level, chunkIndex) => {
         var smbf = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First().BaseAddress;
         var chunksBase = memory.ReadValue<IntPtr>(smbf + (int)vars.CHUNKS_ARRAY_BASE);
@@ -80,11 +88,22 @@ init {
 update {
     if (old.currentChapter != current.currentChapter)
         vars.levelCount = 0;
+    if (current.currentChapter == 4 && current.currentLevel == 12) {
+        if (current.status == 4) {
+            vars.finalBlowSoon = false;
+        }
+        else if (old.levelNotComplete == 1 && current.levelNotComplete == 0) {
+            vars.finalBlowSoon = true;
+        }
+    }
 }
 
 start {
-    vars.levelCount = 0;
-    return old.frameCount == 0 && current.frameCount > 0;
+    if (old.frameCount == 0 && current.frameCount > 0) {
+        vars.levelCount = 0;
+        vars.finalBlowSoon = false;
+        return true;
+    }
 }
 
 reset {
@@ -102,7 +121,7 @@ split {
             if (settings["unlocks"] && vars.levelCount == 4)
                 return true;
         }
-        if (settings["bosses"] && current.currentLevel == 12)
+        if (settings["bosses"] && current.currentLevel == 12 && current.currentChapter != 4)
             return true;
     }
 
@@ -114,6 +133,14 @@ split {
         }
         if (settings["chunks"])
             return true;
+    }
+
+    if (current.currentChapter == 4 && current.currentLevel == 12 && vars.finalBlowSoon) {
+        bool wasFrozen = (old.lastBossFreeze & 2) == 2;
+        bool isFrozen = (current.lastBossFreeze & 2) == 2;
+        if (!wasFrozen && isFrozen) {
+            return true;
+        }
     }
     return false;
 }
