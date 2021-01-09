@@ -34,9 +34,9 @@ state("SuperMeatBoyForever") {
 
 startup {
     settings.Add("bosses", true, "Split upon beating bosses.");
-    settings.Add("levels", true, "Split upon completing levels");
+    settings.Add("levels", true, "Split upon completing levels.");
     settings.Add("unlocks", false, "Split upon unlocking bosses.");
-    settings.Add("chunks", false, "Split upon completing chunks");
+    settings.Add("chunks", false, "Split upon completing chunks.");
     settings.SetToolTip("chunks",  
         "This includes the small 1.5s chunk at the beginning of the level and excludes the last 1.5s chunk");
     settings.Add("chunkLogging", false, "Log chunk times to a file.");
@@ -49,8 +49,13 @@ startup {
             sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
     }
 
-    settings.Add("ilmode", false, "Individual Level Mode");
+    settings.Add("ilmode", false, "Individual Level Mode (turn off when doing full runs).");
     settings.SetToolTip("ilmode", "Makes the timer start at 0 instead of jumping to whatever the current in-game timer is at in order to adjust for individual level/world runs. Also enables auto-starting the timer whenever any level is entered.");
+    
+    settings.CurrentDefaultParent = "ilmode";
+    settings.Add("ilreset", false, "Auto-reset when exiting any level (for ILs).");
+    settings.Add("iwreset", false, "Auto-reset when entering the first level of the world (for IWs).");
+    settings.CurrentDefaultParent = null;
 }
 
 init {
@@ -122,7 +127,14 @@ start {
 }
 
 reset {
-    return old.frameCount > 0 && current.frameCount == 0;
+    if (old.frameCount > 0 && current.frameCount == 0)
+        return true;
+
+    if (settings["ilreset"] && old.currentLevel != -1 && current.currentLevel == -1)
+        return true;
+
+    if (settings["iwreset"] && old.currentLevel == -1 && current.currentLevel == 0)
+        return true;
 }
 
 split {
