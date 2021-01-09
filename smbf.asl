@@ -48,6 +48,9 @@ startup {
         using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
             sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
     }
+
+    settings.Add("ilmode", false, "Individual Level Mode");
+    settings.SetToolTip("ilmode", "Makes the timer start at 0 instead of jumping to whatever the current in-game timer is at in order to adjust for individual level/world runs. Also enables auto-starting the timer whenever any level is entered.");
 }
 
 init {
@@ -58,6 +61,9 @@ init {
     // keeps track of the level count for boss unlock splitting
     // resets to 0 whenever currentChapter changes, increments whenever a level is beaten
     vars.levelCount = 0;
+
+    // Only matters for IL mode, when the timer needs to subtract the framecount of the timer when it started.
+    vars.startFrameCount = 0;
 
     vars.finalBlowSoon = false;
 
@@ -99,9 +105,18 @@ update {
 }
 
 start {
+    vars.startFrameCount = 0;
+
     if (old.frameCount == 0 && current.frameCount > 0) {
         vars.levelCount = 0;
         vars.finalBlowSoon = false;
+        return true;
+    }
+
+    if (settings["ilmode"] && old.currentLevel == -1 && current.currentLevel != -1) {
+        vars.levelCount = 0;
+        vars.finalBlowSoon = false;
+        vars.startFrameCount = current.frameCount;
         return true;
     }
 }
@@ -150,5 +165,8 @@ isLoading {
 }
 
 gameTime {
-    return TimeSpan.FromSeconds(current.frameCount / 60.0);    // 60 frames in a second.
+    if (!settings["ilmode"])
+        return TimeSpan.FromSeconds((current.frameCount)/ 60.0);    // 60 frames in a second.
+    else
+        return TimeSpan.FromSeconds((current.frameCount - vars.startFrameCount)/ 60.0);    // Subtract the time from when the timer started.
 }
