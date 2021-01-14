@@ -1,4 +1,4 @@
-state("SuperMeatBoyForever") {
+state("SuperMeatBoyForever", "6201.1266.1561.138 (EGS)") {
     // as a number of frames (at 60 fps), the speedrun timer that is displayed in the upper right
     uint frameCount : "SuperMeatBoyForever.exe", 0x5dfc98;    
     
@@ -42,13 +42,6 @@ startup {
     settings.Add("chunkLogging", false, "Log chunk times to a file.");
     settings.SetToolTip("chunkLogging", "The file is stored at [livesplit folder]/smbf_log");
 
-    // create log directory and file if they do not exist
-    Directory.CreateDirectory("smbf_log");
-    if (!File.Exists("smbf_log/chunk_times.csv")) {
-        using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
-            sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
-    }
-
     settings.Add("ilmode", false, "Individual Level Mode (turn off when doing full runs).");
     settings.SetToolTip("ilmode", "Makes the timer start at 0 instead of jumping to whatever the current in-game timer is at in order to adjust for individual level/world runs. Also enables auto-starting the timer whenever any level is entered.");
     
@@ -56,12 +49,42 @@ startup {
     settings.Add("ilreset", false, "Auto-reset when exiting any level (for ILs).");
     settings.Add("iwreset", false, "Auto-reset when entering the first level of the world (for IWs).");
     settings.CurrentDefaultParent = null;
+
+    // create log directory and file if they do not exist
+    Directory.CreateDirectory("smbf_log");
+    if (!File.Exists("smbf_log/chunk_times.csv")) {
+        using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
+            sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
+    }
+
+    Func<ProcessModuleWow64Safe, string> CalcModuleHash = (module) => {
+        print("Calcuating hash of " + module.FileName);
+        byte[] exeHashBytes = new byte[0];
+        using (var sha = System.Security.Cryptography.MD5.Create())
+        {
+            using (var s = File.Open(module.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                exeHashBytes = sha.ComputeHash(s);
+            }
+        }
+        var hash = exeHashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
+        print("Hash: " + hash);
+        return hash;
+    };
+    vars.CalcModuleHash = CalcModuleHash;
 }
 
 init {
-    vars.CHUNKS_ARRAY_BASE = 0x5b9ed8;
-    vars.CHUNKS_ARRAY_OFFSET = 0x5e4d00;
-    vars.LEVEL_STRUCTURES = 0x5b3360;
+    var module = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First();
+    var hash = vars.CalcModuleHash(module);
+    if (hash == "E5EC4840D24939E0AB5B30EF45DC1518") {
+        version = "6201.1266.1561.138 (EGS)";
+        print("Version : " + version);
+
+        vars.CHUNKS_ARRAY_BASE = 0x5b9ed8;
+        vars.CHUNKS_ARRAY_OFFSET = 0x5e4d00;
+        vars.LEVEL_STRUCTURES = 0x5b3360;
+    }
 
     // keeps track of the level count for boss unlock splitting
     // resets to 0 whenever currentChapter changes, increments whenever a level is beaten
