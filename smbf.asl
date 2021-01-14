@@ -1,4 +1,4 @@
-state("SuperMeatBoyForever") {
+state("SuperMeatBoyForever", "6201.1266.1561.138 (EGS)") {
     // as a number of frames (at 60 fps), the speedrun timer that is displayed in the upper right
     uint frameCount : "SuperMeatBoyForever.exe", 0x5dfc98;    
     
@@ -32,6 +32,18 @@ state("SuperMeatBoyForever") {
     int status : "SuperMeatBoyForever.exe", 0x5df598, 0x1c0;
 }
 
+state("SuperMeatBoyForever", "6202.1271.1563.138 (EGS)") {
+    uint frameCount : "SuperMeatBoyForever.exe", 0x5e1cf8;    
+    uint levelTimer : "SuperMeatBoyForever.exe", 0x5e1e50;
+    uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x5e1e58;
+    int currentChunkIndex : "SuperMeatBoyForever.exe", 0x5e1c30;
+    int currentChapter : "SuperMeatBoyForever.exe", 0x5df480, 0x0;
+    int currentLevel : "SuperMeatBoyForever.exe", 0x5af000;
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x5b3178;
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x5e1678, 0x10c;
+    int status : "SuperMeatBoyForever.exe", 0x5e1678, 0x1c0;
+}
+
 startup {
     settings.Add("bosses", true, "Split upon beating bosses.");
     settings.Add("levels", true, "Split upon completing levels.");
@@ -42,13 +54,6 @@ startup {
     settings.Add("chunkLogging", false, "Log chunk times to a file.");
     settings.SetToolTip("chunkLogging", "The file is stored at [livesplit folder]/smbf_log");
 
-    // create log directory and file if they do not exist
-    Directory.CreateDirectory("smbf_log");
-    if (!File.Exists("smbf_log/chunk_times.csv")) {
-        using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
-            sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
-    }
-
     settings.Add("ilmode", false, "Individual Level Mode (turn off when doing full runs).");
     settings.SetToolTip("ilmode", "Makes the timer start at 0 instead of jumping to whatever the current in-game timer is at in order to adjust for individual level/world runs. Also enables auto-starting the timer whenever any level is entered.");
     
@@ -56,12 +61,53 @@ startup {
     settings.Add("ilreset", false, "Auto-reset when exiting any level (for ILs).");
     settings.Add("iwreset", false, "Auto-reset when entering the first level of the world (for IWs).");
     settings.CurrentDefaultParent = null;
+
+    // create log directory and file if they do not exist
+    Directory.CreateDirectory("smbf_log");
+    if (!File.Exists("smbf_log/chunk_times.csv")) {
+        using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
+            sw.WriteLine("chapter,level,chunk_id,completion_time_milliseconds");
+    }
+
+    Func<ProcessModuleWow64Safe, string> CalcModuleHash = (module) => {
+        print("Calcuating hash of " + module.FileName);
+        byte[] exeHashBytes = new byte[0];
+        using (var sha = System.Security.Cryptography.MD5.Create())
+        {
+            using (var s = File.Open(module.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                exeHashBytes = sha.ComputeHash(s);
+            }
+        }
+        var hash = exeHashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
+        print("Hash: " + hash);
+        return hash;
+    };
+    vars.CalcModuleHash = CalcModuleHash;
 }
 
 init {
-    vars.CHUNKS_ARRAY_BASE = 0x5b9ed8;
-    vars.CHUNKS_ARRAY_OFFSET = 0x5e4d00;
-    vars.LEVEL_STRUCTURES = 0x5b3360;
+    // compute executable hash in order to determine the game version
+    var module = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First();
+    var hash = vars.CalcModuleHash(module);
+    if (hash == "E5EC4840D24939E0AB5B30EF45DC1518") {
+        version = "6201.1266.1561.138 (EGS)";
+        
+        // base address of array containing the chunk data for the current level
+        vars.CHUNKS_ARRAY_BASE = 0x5b9ed8;
+        vars.CHUNKS_ARRAY_OFFSET = 0x5e4d00;
+
+        // base address of array containing the chunk ids composing the levels
+        vars.LEVEL_STRUCTURES = 0x5b3360;
+    }
+    else if (hash == "9F586FDDE965E87D5CEA1FA46EA33DC0") {
+        version = "6202.1271.1563.138 (EGS)";
+
+        vars.CHUNKS_ARRAY_BASE = 0x5bbee8;
+        vars.CHUNKS_ARRAY_OFFSET = 0x5e6e14;
+        vars.LEVEL_STRUCTURES = 0x5b5370;
+    }
+    print("Game version : " + version);
 
     // keeps track of the level count for boss unlock splitting
     // resets to 0 whenever currentChapter changes, increments whenever a level is beaten
