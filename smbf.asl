@@ -32,6 +32,18 @@ state("SuperMeatBoyForever", "6201.1266.1561.138 (EGS)") {
     int status : "SuperMeatBoyForever.exe", 0x5df598, 0x1c0;
 }
 
+state("SuperMeatBoyForever", "6202.1271.1563.138 (EGS)") {
+    uint frameCount : "SuperMeatBoyForever.exe", 0x5e1cf8;    
+    uint levelTimer : "SuperMeatBoyForever.exe", 0x5e1e50;
+    uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x5e1e58;
+    int currentChunkIndex : "SuperMeatBoyForever.exe", 0x5e1c30;
+    int currentChapter : "SuperMeatBoyForever.exe", 0x5df480, 0x0;
+    int currentLevel : "SuperMeatBoyForever.exe", 0x5af000;
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x5b3178;
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x5e1678, 0x10c;
+    int status : "SuperMeatBoyForever.exe", 0x5e1678, 0x1c0;
+}
+
 startup {
     settings.Add("bosses", true, "Split upon beating bosses.");
     settings.Add("levels", true, "Split upon completing levels.");
@@ -75,16 +87,27 @@ startup {
 }
 
 init {
+    // compute executable hash in order to determine the game version
     var module = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First();
     var hash = vars.CalcModuleHash(module);
     if (hash == "E5EC4840D24939E0AB5B30EF45DC1518") {
         version = "6201.1266.1561.138 (EGS)";
-        print("Version : " + version);
-
+        
+        // base address of array containing the chunk data for the current level
         vars.CHUNKS_ARRAY_BASE = 0x5b9ed8;
         vars.CHUNKS_ARRAY_OFFSET = 0x5e4d00;
+
+        // base address of array containing the chunk ids composing the levels
         vars.LEVEL_STRUCTURES = 0x5b3360;
     }
+    else if (hash == "9F586FDDE965E87D5CEA1FA46EA33DC0") {
+        version = "6202.1271.1563.138 (EGS)";
+
+        vars.CHUNKS_ARRAY_BASE = 0x5bbee8;
+        vars.CHUNKS_ARRAY_OFFSET = 0x5e6e14;
+        vars.LEVEL_STRUCTURES = 0x5b5370;
+    }
+    print("Game version : " + version);
 
     // keeps track of the level count for boss unlock splitting
     // resets to 0 whenever currentChapter changes, increments whenever a level is beaten
