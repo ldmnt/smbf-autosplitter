@@ -2,10 +2,10 @@ state("SuperMeatBoyForever", "6201.1266.1561.138 (EGS)") {
     // as a number of frames (at 60 fps), the speedrun timer that is displayed in the upper right
     uint frameCount : "SuperMeatBoyForever.exe", 0x5dfc98;    
     
-    // in nanoseconds, the level timer that is displayed in the upper left
+    // in microseconds, the level timer that is displayed in the upper left
     uint levelTimer : "SuperMeatBoyForever.exe", 0x5dfd70;
 
-    // in nanoseconds, level timer at the last chunk completion
+    // in microseconds, level timer at the last chunk completion
     uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x5dfd78;
     
     // position of the current chunk in the level, so usually 0 to 8
@@ -115,6 +115,15 @@ init {
 
     // Only matters for IL mode, when the timer needs to subtract the framecount of the timer when it started.
     vars.startFrameCount = 0;
+    
+    // Equivalent of lastChunkSplitTime in terms of the speedrun timer.
+    // Since this value is updated almost simultaneously to chunk completions,
+    // the buffer and timer are used to delay the update. This way the old value
+    // is used for chunk time calculations in case of a chunk completion.
+    vars.lastChunkSplitFrames = 0;
+    vars.lastChunkSplitFramesBuffer = 0;
+    vars.lastChunkSplitTimer = -1;
+    vars.justDied = false;    // to reset the chunk timer in case of death;
 
     vars.finalBlowSoon = false;
 
@@ -151,6 +160,27 @@ update {
         }
         else if (old.levelNotComplete == 1 && current.levelNotComplete == 0) {
             vars.finalBlowSoon = true;
+        }
+    }
+    
+    if (current.levelTimer < old.levelTimer)
+        vars.justDied = true;
+    bool timerRestarted = false;
+    if (vars.justDied && current.levelTimer > old.levelTimer) {
+        vars.justDied = false;
+        timerRestarted = true;
+    }
+    var completedChunk = old.lastChunkSplitTime != current.lastChunkSplitTime;
+    if (current.levelNotComplete == 1 && (completedChunk || timerRestarted)) {
+        vars.lastChunkSplitFramesBuffer = old.frameCount;
+        vars.lastChunkSplitTimer = 4;
+    }
+    else {
+        if (vars.lastChunkSplitTimer > 0) {
+            vars.lastChunkSplitTimer -= current.frameCount - old.frameCount;
+            if (vars.lastChunkSplitTimer <= 0) {
+                vars.lastChunkSplitFrames = vars.lastChunkSplitFramesBuffer;
+            }
         }
     }
 }
@@ -201,7 +231,7 @@ split {
     if (old.currentChunkIndex < current.currentChunkIndex && current.currentLevel >= 0 && current.currentLevel < 12) {
         if (settings["chunkLogging"] && old.currentChunkIndex > 0) {
             var chunkId = vars.GetChunkId(old.currentChapter, old.currentLevel, old.currentChunkIndex);
-            uint chunkTime = (current.levelTimer - old.lastChunkSplitTime) / 1000;
+            uint chunkTime = (uint) ((current.frameCount - vars.lastChunkSplitFrames) / 60.0f * 1000);
             vars.LogTime(old.currentChapter, old.currentLevel, chunkId, chunkTime);
         }
         if (settings["chunks"])
