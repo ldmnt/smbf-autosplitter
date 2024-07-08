@@ -44,6 +44,42 @@ state("SuperMeatBoyForever", "6202.1271.1563.138 (EGS)") {
     int status : "SuperMeatBoyForever.exe", 0x5e1678, 0x1c0;
 }
 
+state("SuperMeatBoyForever", "6480.1704.1895.145") {
+    uint frameCount : "SuperMeatBoyForever.exe", 0x55A1B8;    
+    uint levelTimer : "SuperMeatBoyForever.exe", 0x55A148;
+    uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x55A150;
+    int currentChunkIndex : "SuperMeatBoyForever.exe", 0x55A1A4;
+    int currentChapter : "SuperMeatBoyForever.exe", 0x55A790;
+    int currentLevel : "SuperMeatBoyForever.exe", 0x52A00C;
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x52E2F0;
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x5598B8, 0x10, 0x78, 0x40, 0x10c;
+    int status : "SuperMeatBoyForever.exe", 0x5598B8, 0x10, 0x78, 0x40, 0x1c0;
+}
+
+state("SuperMeatBoyForever", "6756.1851.1963.152") {
+    uint frameCount : "SuperMeatBoyForever.exe", 0x570338;    
+    uint levelTimer : "SuperMeatBoyForever.exe", 0x5702C8;
+    uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x5702D0;
+    int currentChunkIndex : "SuperMeatBoyForever.exe", 0x570330;
+    int currentChapter : "SuperMeatBoyForever.exe", 0x570C88;
+    int currentLevel : "SuperMeatBoyForever.exe", 0x53F000;
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x5436CC;
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x57A9B0, 0x10c;
+    int status : "SuperMeatBoyForever.exe", 0x57A9B0, 0x1c0;
+}
+
+state("SuperMeatBoyForever", "6314.1573.1853.145") {
+    uint frameCount : "SuperMeatBoyForever.exe", 0x5580B0;
+    uint levelTimer : "SuperMeatBoyForever.exe", 0x558040;
+    uint lastChunkSplitTime : "SuperMeatBoyForever.exe", 0x558048;
+    int currentChunkIndex : "SuperMeatBoyForever.exe", 0x5567CC;
+    int currentChapter : "SuperMeatBoyForever.exe", 0x5584B0;
+    int currentLevel : "SuperMeatBoyForever.exe", 0x52800C;
+    int levelNotComplete : "SuperMeatBoyForever.exe", 0x52C2C0;
+    int lastBossFreeze : "SuperMeatBoyForever.exe", 0x561B60, 0x10c;
+    int status : "SuperMeatBoyForever.exe", 0x561B60, 0x1c0;
+}
+
 startup {
     settings.Add("bosses", true, "Split upon beating bosses.");
     settings.Add("levels", true, "Split upon completing levels.");
@@ -90,6 +126,7 @@ init {
     // compute executable hash in order to determine the game version
     var module = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First();
     var hash = vars.CalcModuleHash(module);
+    print(hash);
     if (hash == "E5EC4840D24939E0AB5B30EF45DC1518") {
         version = "6201.1266.1561.138 (EGS)";
         
@@ -106,7 +143,16 @@ init {
         vars.CHUNKS_ARRAY_BASE = 0x5bbee8;
         vars.CHUNKS_ARRAY_OFFSET = 0x5e6e14;
         vars.LEVEL_STRUCTURES = 0x5b5370;
+    } else if (hash == "CB271333330046985CDE76DD8626EAC0") {
+        version = "6756.1851.1963.152";
+    } else if (hash == "5A8DBD6BC1FED9F33B908B55AFE74558") {
+        version = "6314.1573.1853.145";
+    } else {
+        // This was the version just before workshop update and I didn't compute hash then,
+        // and too much effort to get that version again
+        version = "6480.1704.1895.145";
     }
+
     print("Game version : " + version);
 
     // keeps track of the level count for boss unlock splitting
@@ -127,22 +173,6 @@ init {
 
     vars.finalBlowSoon = false;
 
-    vars.GetChunkId = (Func<int, int, int, ushort>) ((chapter, level, chunkIndex) => {
-        var smbf = modules.Where(m => m.ModuleName == "SuperMeatBoyForever.exe").First().BaseAddress;
-        var chunksBase = memory.ReadValue<IntPtr>(smbf + (int)vars.CHUNKS_ARRAY_BASE);
-        var chunksBaseOffset = memory.ReadValue<int>(smbf + (int)vars.CHUNKS_ARRAY_OFFSET);
-        var chunks = new DeepPointer(
-            chunksBase + 8 * chunksBaseOffset, 
-            0x78 + 0x9e0 + 0x18
-        ).Deref<IntPtr>(game);
-        var chunkId = new DeepPointer(
-            smbf + (int)vars.LEVEL_STRUCTURES, 
-            8 * 5 * chapter + 0x20, 
-            0x58 * level + 0x48, 
-            4 * chunkIndex
-        ).Deref<ushort>(game);
-        return chunkId;
-    });
 
     vars.LogTime = (Func<int, int, ushort, uint, bool>) ((chapter, level, chunkId, completionTime) => {
         using (StreamWriter sw = File.AppendText("smbf_log/chunk_times.csv"))
@@ -227,17 +257,6 @@ split {
         if (settings["bosses"] && current.currentLevel == 12 && current.currentChapter != 4)
             return true;
     }
-
-    if (old.currentChunkIndex < current.currentChunkIndex && current.currentLevel >= 0 && current.currentLevel < 12) {
-        if (settings["chunkLogging"] && old.currentChunkIndex > 0) {
-            var chunkId = vars.GetChunkId(old.currentChapter, old.currentLevel, old.currentChunkIndex);
-            uint chunkTime = (uint) ((current.frameCount - vars.lastChunkSplitFrames) / 60.0f * 1000);
-            vars.LogTime(old.currentChapter, old.currentLevel, chunkId, chunkTime);
-        }
-        if (settings["chunks"])
-            return true;
-    }
-
     if (current.currentChapter == 4 && current.currentLevel == 12 && vars.finalBlowSoon) {
         bool wasFrozen = (old.lastBossFreeze & 2) == 2;
         bool isFrozen = (current.lastBossFreeze & 2) == 2;
